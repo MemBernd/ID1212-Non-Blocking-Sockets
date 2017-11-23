@@ -1,0 +1,13 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Literature Study}{}% 2
+\BOOKMARK [1][-]{section.3}{Method}{}% 3
+\BOOKMARK [1][-]{section.4}{Result}{}% 4
+\BOOKMARK [2][-]{subsection.4.1}{Blocking TCP sockets}{section.4}% 5
+\BOOKMARK [2][-]{subsection.4.2}{Stateless client}{section.4}% 6
+\BOOKMARK [2][-]{subsection.4.3}{Multithreaded client}{section.4}% 7
+\BOOKMARK [2][-]{subsection.4.4}{Multithreaded server}{section.4}% 8
+\BOOKMARK [2][-]{subsection.4.5}{Communication}{section.4}% 9
+\BOOKMARK [2][-]{subsection.4.6}{Layering}{section.4}% 10
+\BOOKMARK [2][-]{subsection.4.7}{Informative UI}{section.4}% 11
+\BOOKMARK [1][-]{section.5}{Discussion}{}% 12
+\BOOKMARK [1][-]{section.6}{Comments About the Course}{}% 13
