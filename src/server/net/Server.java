@@ -16,6 +16,8 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Iterator;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import server.controller.Controller;
 
 /**
@@ -51,22 +53,40 @@ public class Server {
                     if (key.isAcceptable()) {
                         startNewClient(key);
                     } else if(key.isReadable()) {
-                        
+                        receive(key);
                     } else if(key.isWritable()) {
-                        
+                        send(key);
                     }
                 }
             }
         } catch (IOException e) {
-            System.err.println("Server failure.");
+            e.printStackTrace();
         }
+    }
+    
+    private void receive(SelectionKey key) throws IOException {
+        Handler handler = (Handler) key.attachment();
+            handler.receiveMessage();
+            //handler.disconnect();
+            //key.cancel();
+    }
+    
+    public void reply(SocketChannel client, String msg) {
+        client.keyFor(selector).interestOps(SelectionKey.OP_WRITE);
+        selector.wakeup();
+    }
+    
+    private void send(SelectionKey key) throws IOException {
+        Handler handler = (Handler) key.attachment();
+        handler.sendMessage();
+        key.interestOps(SelectionKey.OP_READ);
     }
     
     private void startNewClient(SelectionKey key) throws IOException {
         ServerSocketChannel server = (ServerSocketChannel) key.channel();
         SocketChannel clientChannel = server.accept();
         clientChannel.configureBlocking(false);
-        clientChannel.register(selector, SelectionKey.OP_READ, new Handler(clientChannel));
+        clientChannel.register(selector, SelectionKey.OP_READ, new Handler(clientChannel, this));
         clientChannel.setOption(StandardSocketOptions.SO_LINGER, LINGER);
     }
     

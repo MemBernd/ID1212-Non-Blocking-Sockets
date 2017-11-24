@@ -12,9 +12,12 @@ import java.io.PrintWriter;
 import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.StringJoiner;
+import java.util.concurrent.ForkJoinPool;
 import protocol.Constants;
 import server.controller.Controller;
 
@@ -25,12 +28,15 @@ import server.controller.Controller;
 public class Handler implements Runnable {
     private SocketChannel channel;
     private boolean exit = false;
-    private ByteBuffer messageReceived = ByteBuffer.allocateDirect(Constants.MAX_LENGTH);
+    private final ByteBuffer messageReceived = ByteBuffer.allocateDirect(Constants.MAX_LENGTH);
     //private String message;
     private Controller controller = new Controller();
+    private final Server server;
+    private String reply;
     
-    Handler(SocketChannel clientChannel) {
+    Handler(SocketChannel clientChannel, Server server) {
         channel = clientChannel;
+        this.server = server;
     }
     
     @Override
@@ -38,7 +44,7 @@ public class Handler implements Runnable {
 
         try {
             String[] message = extractFromBuffer(messageReceived).split(Constants.DELIMITER);
-            String reply = "";
+            reply = "";
             switch (message[0]) {
                 case "QUIT":
                     disconnect();
@@ -47,7 +53,8 @@ public class Handler implements Runnable {
                 case "START":
                     controller.startGame();
                     reply += "Game started:" + Constants.NEW_LINE;
-                    channel.write(prepareMessage(reply + stateToString()));
+                    reply += stateToString();
+                    server.reply(channel, reply);
                     break;
                 default:
                     if (controller.gameStarted()) {
@@ -64,13 +71,28 @@ public class Handler implements Runnable {
                         reply += "Game hasn't started yet.";
                     }
 
-                    channel.write(prepareMessage(reply));
+                    server.reply(channel, reply);
             }
         } catch(Exception e) {
-            //e.printStackTrace();
+            e.printStackTrace();
             System.err.println("Error in clienthandler run, aborting.");
             exit = true;
         }   
+    }
+    
+    public void receiveMessage() throws IOException {
+        messageReceived.clear();
+        int readBytes;
+        readBytes = channel.read(messageReceived);
+        if (readBytes == -1) {
+            throw new IOException("Client has closed the connection.");
+        }
+        //String received = extractFromBuffer(messageReceived);
+        ForkJoinPool.commonPool().execute(this);
+    }
+    
+    public void sendMessage() throws IOException {
+        channel.write(ByteBuffer.wrap(reply.getBytes()));
     }
     
     private String extractFromBuffer(ByteBuffer message) {
@@ -96,7 +118,7 @@ public class Handler implements Runnable {
         return joinedMessage.toString();
     }
     
-    private void disconnect() throws IOException {
+    public void disconnect() throws IOException {
         channel.close();
     }
 }
