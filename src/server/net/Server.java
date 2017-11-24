@@ -82,8 +82,8 @@ public class Server {
     private void send(SelectionKey key) throws IOException {
         Handler handler = (Handler) key.attachment();
         try {
-        handler.sendMessage();
-        key.interestOps(SelectionKey.OP_READ);
+            handler.sendMessage();
+            key.interestOps(SelectionKey.OP_READ);
         } catch(IOException e) {
             handler.disconnect();
             key.cancel();

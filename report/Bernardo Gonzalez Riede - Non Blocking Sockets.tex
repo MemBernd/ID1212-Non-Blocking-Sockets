@@ -89,10 +89,13 @@ This loop has different actions associated with different operations (l. 61 - 68
 In the first iteration, having the operation set to _connect_, it will finish establishing the connection.
 Being the initiator in all communication, the client has to write a command which passes through sendMessage(String) (l.115).
 Using a lock, this method appends the message to a queue (having added a length header), sets a boolean flag to true and wakeups the Selector, aka the loop of ServerConnection.
+
 The boolean flag makes sure the operation is set to _write_ and empties the queue by calling sendToServer().
 This function loops through the queue and sends every message on line 144, channel.write(ByteBuffer).
 Afterwards the operation of the key is set to _read_, expecting an answer from the server.
-\\When the cannel has information to be read, the selector calls receiveMessage() (l.123).
+
+
+When the channel has information to be read, the selector calls receiveMessage() (l.123).
 An if conditions makes sure that the connection isn't lost, which would return -1.
 Afterwards verifyMessage(String) (l.176) is used to match the length header to the actual body size of the message.
 If everything is right, the body of the message is returned and printed, otherwise an exception is raised.
@@ -111,8 +114,20 @@ Again, at the first run, following actions are performed:
 The operation of its own channel won't change during execution, instead a new channel is created every time a client connects.
 It gets registered with the same Selector, with operation _read_, and a server.net.Handler is created and attached (l. 93 - 98).
 Every change in a channel in its state of operation returns selector.select() and calls the appropriate action.
-The logic itself is similar to the one from the client, except that the sequence of methods jumps between handler and server and that the server stays in _read_ only changing briefly to _write_ when sending the reply.
-Sequence of jumps
+The logic itself is similar to the one from the client, except the sequence of methods jumps between handler and server, and that the server stays in _read_ only changing briefly to _write_ when sending the reply.
+Sequence of jumps:
+\begin{enumerate}
+    \item Key has been selected because there was a change (write) and is readable (Server l. 56).
+    \item The attached Handler is parsed from the attachement of the key and its sendMessage() is called (Server l. 67 - 70).
+    \item The channel is read and and stored in a global (in Handler) ByteBuffer (Handler l. 91 - 93).
+    \item The Handler submits itself to a ForkJoinPool, therefore run() (Handler l. 41) starts.
+    \item Depending on the content of the message, the correct actions is exectued.
+    \item Assuming the action involves sending a reply, Server.reply(socketChannel) is called.
+    \item Server.reply(SocketChannel) sets the operation of the key to _write_ and wakes up the selector. (Server l. 78 + 79)
+    \item Because of the operation _write_ being set, Server.send(SelectionKey) is used, which, again, parses the Handler to execute sendMessage() in it.
+    \item Handler.sendMessage() writes the previously (during run()) created reply to the channel and returns. (Handler l. 101)
+    \item Still in Server.send(SelectionKey), the operation is set to _read_ again.
+\end{enumerate}
 
 
 \subsection{Multithreaded client}
@@ -120,11 +135,11 @@ Same as in previous assignment, 1 thread for input, 1 for output.
 
 
 \subsection{Multithreaded server}
-The server has one thread for listening to incoming new connections and when processing incoming messages, the Handler submits itself to a ForkJoinPool (l. 97).
+The server has one thread for listening for incoming new connections and when processing incoming messages, the Handler submits itself to a ForkJoinPool (l. 97).
 Therefore the amount of concurrent threads is limited and the threads die after processing the message and having created the reply.
 
 
-\subsection{Communication & handling of incomplete messages}
+\subsection{Communication \& handling of incomplete messages}
 Both, client \& server have access to protocol.Constants where some constants, such as the delimiter for the communication are defined.
 The same methods for prepending the length header and verifying the length header exists in server.net.Handler (l. 111 - 126) and in client.net.ServerConnection (l. 169 - 184).
 
@@ -155,23 +170,15 @@ The client.view.Interpreter has an extending class to _OutputHandler_ as a inner
 Since its a specialization, it can used wherever its superclass can be used.
 This enables it to print output without making an call to the view.
 
-\subsection{Informative UI}
-In Figure \ref{fig:ui} several of the information provided to the user and his input can be seen.
-The instructions at the start of the client, establishing a connection, starting a game, doing a correct (lucky) input and an incorrect one.
+\subsection{Hangman game}
+Several of the information provided to the user and his input can be seen.
+The instructions at the start of the client, establishing a connection, starting a game and doing some input.
+
+Figure \ref{fig:multiple} shows 2 clients playing at once.
 
 \begin{figure}[h!]
   \begin{center}
-    \includegraphics[scale=0.8]{ui.png}
-    \caption{}
-    \label{fig:ui}
-  \end{center}
-\end{figure}
-
-Figure \ref{fig:multiple} shows 2 clients playing at once. Moreover, the timeout used can be seen on the server thread in the right bottom command line.
-
-\begin{figure}[h!]
-  \begin{center}
-    \includegraphics[scale=0.4]{}
+    \includegraphics[scale=0.1]{multiple.png}
     \caption{Concurrent players.}
     \label{fig:multiple}
   \end{center}
@@ -179,16 +186,24 @@ Figure \ref{fig:multiple} shows 2 clients playing at once. Moreover, the timeout
 
 \section{Discussion}
 
-A slight downside to the approach of using locks, i.e. the synchronized keyword in Java, for accessing the message queue which should be sent to the server.
+
+A slight downside to the approach of using locks, i.e. the synchronized keyword in Java, for accessing the message queue which should be sent to the server, is the following observed behaviour.
 If the sending takes long, e.g. inserting Thread.sleep(10000) on line 143 (ServerConnection.sendToServer()), and the user types more commands which have to be sent then no _prompts_ are printed instantly.
 This is the result of the sendMessage() waiting for the lock to release to be able to queue the command/message.
-This dosn't affect the responsiveness per se, since the user is still able to input commands which get executed.
+This doesn't affect the responsiveness per se, since the user is still able to input commands which get executed.
 
-This behaviour can be observer on the provided chat example if Thread.sleep(X) is inserted in ServerConnection.sendToServer() on line 201.
+This behaviour can be observed on the provided chat example, too, if Thread.sleep(X) is inserted in ServerConnection.sendToServer() on line 201.
 
 
 \section{Comments About the Course}
 
+The time invested in this project were 13 hours.
+\begin{itemize}
+        \item 6h 46min for coding.
+        \item 2h 25min reading the code.
+        \item 1h 57min for the report.
+        \item 2h watching videos, taking notes and thinking about how to tackle the problem.
+\end{itemize}
 
 
 \end{document}

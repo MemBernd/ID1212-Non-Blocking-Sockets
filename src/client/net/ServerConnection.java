@@ -140,7 +140,7 @@ public class ServerConnection implements Runnable {
         try {
             synchronized(messageToSend) {
                 while((message = messageToSend.poll()) != null) {
-                    Thread.sleep(4000);
+                    Thread.sleep(000);
                     channel.write(message);
                     if(message.hasRemaining())
                         return;
