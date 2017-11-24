@@ -22,5 +22,5 @@ public class Constants {
     
     public static final String NEW_LINE = "\n";
     
-    public static final int MAX_LENGTH = 1024;
+    public static final int MAX_LENGTH = 8192;
 }

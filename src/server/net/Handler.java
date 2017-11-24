@@ -87,11 +87,10 @@ public class Handler implements Runnable {
         if (readBytes == -1) {
             throw new IOException("Client has closed the connection.");
         }
-        //String received = extractFromBuffer(messageReceived);
         ForkJoinPool.commonPool().execute(this);
     }
     
-    public void sendMessage() throws IOException {
+    public void sendMessage() throws IOException { 
         channel.write(ByteBuffer.wrap(reply.getBytes()));
     }
     

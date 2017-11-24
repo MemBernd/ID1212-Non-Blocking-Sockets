@@ -66,9 +66,12 @@ public class Server {
     
     private void receive(SelectionKey key) throws IOException {
         Handler handler = (Handler) key.attachment();
+        try {
             handler.receiveMessage();
-            //handler.disconnect();
-            //key.cancel();
+        } catch (IOException e) {
+            handler.disconnect();
+            key.cancel();
+        }
     }
     
     public void reply(SocketChannel client, String msg) {
@@ -78,8 +81,13 @@ public class Server {
     
     private void send(SelectionKey key) throws IOException {
         Handler handler = (Handler) key.attachment();
+        try {
         handler.sendMessage();
         key.interestOps(SelectionKey.OP_READ);
+        } catch(IOException e) {
+            handler.disconnect();
+            key.cancel();
+        }
     }
     
     private void startNewClient(SelectionKey key) throws IOException {

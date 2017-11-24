@@ -14,9 +14,12 @@ import static java.lang.Thread.sleep;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.logging.Level;
@@ -37,7 +40,7 @@ public class ServerConnection implements Runnable {
     private SocketChannel channel;
     private OutputHandler output;
     private ByteBuffer messageReceived = ByteBuffer.allocateDirect(Constants.MAX_LENGTH);
-    private ByteBuffer messageToSend = ByteBuffer.allocateDirect(Constants.MAX_LENGTH);
+    private Queue<ByteBuffer> messageToSend = new ArrayDeque<>();
     private boolean sendNow = false;
     
     public void run() {
@@ -65,8 +68,16 @@ public class ServerConnection implements Runnable {
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            output.printMessage("Error while communicating");
         }
+        if(connected) {
+            try {
+                disconnect();
+            } catch(IOException e) {
+                output.printMessage("Error");
+            }
+        }
+        
     }
     
     private void initialize() throws IOException {
@@ -85,10 +96,8 @@ public class ServerConnection implements Runnable {
     }
     
     public void disconnect() throws IOException {
-        if (connected) {
-            socket.close();
-        }
-        socket = null;
+        channel.close();
+        channel.keyFor(selector).cancel();
         connected = false;
     }
     
@@ -103,8 +112,9 @@ public class ServerConnection implements Runnable {
     }
     
     private void sendMessage(String message) {
-        //this.message.clear();
-        this.messageToSend = ByteBuffer.wrap(message.getBytes());
+        synchronized(messageToSend) {
+            messageToSend.add(ByteBuffer.wrap(message.getBytes()));
+        }
         sendNow = true;
         selector.wakeup();
     }
@@ -126,11 +136,24 @@ public class ServerConnection implements Runnable {
     }
     
     private void sendToServer(SelectionKey key) {
+        ByteBuffer message;
         try {
-            channel.write(messageToSend);
-            key.interestOps(SelectionKey.OP_READ);
+            synchronized(messageToSend) {
+                while((message = messageToSend.poll()) != null) {
+                    Thread.sleep(4000);
+                    channel.write(message);
+                    if(message.hasRemaining())
+                        return;
+                }
+             key.interestOps(SelectionKey.OP_READ);   
+            }
+            
         } catch (IOException ex) {
-            System.out.println("Couldn't send.");
+            output.printMessage("Couldn't send.");
+        } catch(CancelledKeyException e) {
+            output.printMessage("Program quit while sending");
+        } catch (InterruptedException ex) {
+            Logger.getLogger(ServerConnection.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
     
