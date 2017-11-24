@@ -36,36 +36,23 @@
 
 \section{Introduction}
 
-
+Goals needed to accomplish Task 1, Hangman with non-blocking sockets:
 \begin{itemize}
-    \item Server and client have to communicate via blocking TCP connections.
-    TCP is a transport protocol for a network, guaranteeing no lost packets iff a connection is established.
-    Moreover, it uses a sequence number to ensure delivery in correct order.
-    \item The client must not store any data.
-    A stateless implementation of the client is preferred.
-    \item The client must have a responsive user interface, i.e. being able to type commands while previous ones are still processed.
-    This is at least best practice, if not a requirement in all programs.
-    \item The server should be able to handle several clients simulteanously.
-    Every client has to have its own game which doesn't get affected by other players.
-    \item The user interface must be informative.
+    \item Usage of only non-blocking sockets.
+    \item Server being able to handle concurrent clients, i.e. multithreading.
+    \item Responsive user interface, i.e. multithreaded.
+    \item Hangman game functioning as expected.
 \end{itemize}
 
 
 \section{Literature Study}
 
-The main literature for this assignment was a combination of all the videos related to streams and sockets, i.e. streams-, file-handler-prog-example-,
-    sockets-, chat-program-part*.webm, and the related source code files.
-By studying the example and refering to javadocs the flow and layering coalesced to a fitting picture.
-Most importatn concepts obtained:
-\begin{itemize}
-    \item The layering doesn't imply that in mvc some kind of view is always at the top.
-    A more fitting description is _event initiator_, in case of the server the network layer which receives request from the client.
-    \item Using an _enum_ provides access to a finite set of constants which hold their own name as value.
-    This is even faster than an integer for switching.
-    Perfect for entering commands
-    \item Observer pattern can be used to prevent upcalls from layers to layers above.
-    \item (G)UI can be made responsive using an additional thread for commands with latency, i.e. network communication.
-    \item Stream reading can be layered, e.g. a _DataOutputStream_ over a _BufferedOutputStream_ over a _FileOutputStream_.\end{itemize}
+Although not literature in a classic sense, the provided example of the chat server and client shed much light over the usage of selectors.
+Instead of having a thread block on a method, e.g. readLine(), an abstraction of a stream, called channel in the nio package, can be created and registered under one common selector.
+The connection of a channel with a selector is called a key.
+Said key can hold an attachment and has an operation, which its waiting for, registered.
+The result is only one blocking method, Selector.select(), which returns when a change in a channel happens or when Selector.wakeup() is manually called.
+\\A Selector can have multiple channels attached.
 
 
 \section{Method}
@@ -80,53 +67,72 @@ Developing was done in Netbeans.
 \section{Result}
 
 
-Link to public Github repository with codehttps://github.com/MemBernd/ID1212-blockingSockets
-\href{https://github.com/MemBernd/ID1212-blockingSockets}{https://github.com/MemBernd/ID1212-blockingSockets}
+Link to public Github repository with code:
+\href{https://github.com/MemBernd/ID1212-Non-Blocking-Sockets}{https://github.com/MemBernd/ID1212-Non-Blocking-Sockets}
 
-\subsection{Blocking TCP sockets}
+\subsection{Non Blocking TCP sockets}
 
-The socket on the client side is created in client.net.ServerConnection on lines 29-31.
-For a socket to be able to connect it needs an adress, composed of the host and a port, and a timeout.
-The _setSoTimeout()_ sets the time the socket is blocked.
-\\The server has its implementation of sockets in server.net.Server on lines 31.
-Aftewards it stays in a loop accepting connection.
-When it receives a request on the specified port (configured default of 54321), it accept it, receiving an available socket form the OS for further communication.
-This socket is passed to _handleClient()_ where timeouts are set.
+\subsubsection{Client}
 
-\subsection{Stateless client}
-
-The information of the game which have to tracked are:
+The usage of a Selector to provide non-blocking sockets has been implemented in client.net.ServerConnection.
+\\The very first method call on it is connect() (l.93) where a new InetSocketAddress is created with the hostname and port provided.
+Moreover this class, being an implementation of Runnable, is submitted to its own thread.
+This starts its run() (l.47) which initializes the channel by:
 \begin{itemize}
-    \item current word trying to guess
-    \item progress in guessing the word
-    \item attempts left
-    \item score
+        \item Opening Selector and channel
+        \item Configure channel as non-blocking
+        \item connect to the InetSocketAddress
+        \item register the channel in the Selector with interest in the _connect_ operation
 \end{itemize}
-The variables are stored in server.model.GameState.
-They are defined on lines 18-21.
-While the score is initialized at the creation of a client handler, the remaining variables are initialized on lines 15-78 inside _initializeGame()_ which gets called when the user starts a game.
+From there on, the thread lives in a loop, reacting to changes and wakeups in the selector.
+This loop has different actions associated with different operations (l. 61 - 68)
+In the first iteration, having the operation set to _connect_, it will finish establishing the connection.
+Being the initiator in all communication, the client has to write a command which passes through sendMessage(String) (l.115).
+Using a lock, this method appends the message to a queue (having added a length header), sets a boolean flag to true and wakeups the Selector, aka the loop of ServerConnection.
+The boolean flag makes sure the operation is set to _write_ and empties the queue by calling sendToServer().
+This function loops through the queue and sends every message on line 144, channel.write(ByteBuffer).
+Afterwards the operation of the key is set to _read_, expecting an answer from the server.
+\\When the cannel has information to be read, the selector calls receiveMessage() (l.123).
+An if conditions makes sure that the connection isn't lost, which would return -1.
+Afterwards verifyMessage(String) (l.176) is used to match the length header to the actual body size of the message.
+If everything is right, the body of the message is returned and printed, otherwise an exception is raised.
+
+\subsubsection{Server}
+
+The Selector implementation can be found in server.net.Server, while the functions which change the operation of the channel are called from the corresponding server.net.Handler.
+The server lives in serve() in a loop including the selector.select() and the actions to handle the different operations of the channels.
+Again, at the first run, following actions are performed:
+\begin{itemize}
+        \item Opening Selector and channel
+        \item Configure channel as non-blocking
+        \item connect to the InetSocketAddress
+        \item register its own channel in the Selector with interest in the _accept_ operation
+\end{itemize}
+The operation of its own channel won't change during execution, instead a new channel is created every time a client connects.
+It gets registered with the same Selector, with operation _read_, and a server.net.Handler is created and attached (l. 93 - 98).
+Every change in a channel in its state of operation returns selector.select() and calls the appropriate action.
+The logic itself is similar to the one from the client, except that the sequence of methods jumps between handler and server and that the server stays in _read_ only changing briefly to _write_ when sending the reply.
+Sequence of jumps
+
 
 \subsection{Multithreaded client}
+Same as in previous assignment, 1 thread for input, 1 for output.
 
-Client.view.Interpreter, the class which the user interacts with, extends the _Thread_ class and isstarted by client.startup.Hangman.
-It creates a client.controller.Controller which itself creates a client.net.ServerConnection.
-This class holds an inner class, at line 56, _Listener_, extending _Runnable_.
-On line 35 of client.net.ServerConnection the second thread of every client is created, an instance of _Listener_.
 
 \subsection{Multithreaded server}
-
-The amount of threads of the server is 1 + amount of connected clients.
-The startup starts server.net.Server which listens permanently on line 33.
-When receiving a request it starts server.net.Handler, an extension to _Thread_.
-Since the users don't share any data, everyone having their own thread, a complete mvc, was selected.
-Because accepting a request on line 33 creates a new socket for each client, no need for an id or similar was needed to communicate a client with the correct thread.
+The server has one thread for listening to incoming new connections and when processing incoming messages, the Handler submits itself to a ForkJoinPool (l. 97).
+Therefore the amount of concurrent threads is limited and the threads die after processing the message and having created the reply.
 
 
-\subsection{Communication}
-Both, client \& server have access to protocol.Constants where some constans, such as the delimiter for the communication are defined.
-Since the client doesn't have to process the received messages in any way, it just prints them out.
+\subsection{Communication & handling of incomplete messages}
+Both, client \& server have access to protocol.Constants where some constants, such as the delimiter for the communication are defined.
+The same methods for prepending the length header and verifying the length header exists in server.net.Handler (l. 111 - 126) and in client.net.ServerConnection (l. 169 - 184).
+
+
 
 \subsection{Layering}
+The Layering hasn't changed from the previous assignment, but has been included anyway.
+
 The client is divided as follows:
 \begin{itemize}
     \item The model is equivalent to the client.net package holding _ServerConnection_.
@@ -156,7 +162,7 @@ The instructions at the start of the client, establishing a connection, starting
 \begin{figure}[h!]
   \begin{center}
     \includegraphics[scale=0.8]{ui.png}
-    \caption{Instructions and game state on client side}
+    \caption{}
     \label{fig:ui}
   \end{center}
 \end{figure}
@@ -165,7 +171,7 @@ Figure \ref{fig:multiple} shows 2 clients playing at once. Moreover, the timeout
 
 \begin{figure}[h!]
   \begin{center}
-    \includegraphics[scale=0.4]{multiple.png}
+    \includegraphics[scale=0.4]{}
     \caption{Concurrent players.}
     \label{fig:multiple}
   \end{center}
@@ -173,19 +179,16 @@ Figure \ref{fig:multiple} shows 2 clients playing at once. Moreover, the timeout
 
 \section{Discussion}
 
-All requirements have been met.
-Difficulties, once having an understanding, were only encountered regarding on how to use the functions.
-It was a lengthy process due to wanting to recreate an elegantly structured program.
-At some points the struture of the code itself suffered from it, e.g. server.model.GameState.finishes() needs cleaning.
+A slight downside to the approach of using locks, i.e. the synchronized keyword in Java, for accessing the message queue which should be sent to the server.
+If the sending takes long, e.g. inserting Thread.sleep(10000) on line 143 (ServerConnection.sendToServer()), and the user types more commands which have to be sent then no _prompts_ are printed instantly.
+This is the result of the sendMessage() waiting for the lock to release to be able to queue the command/message.
+This dosn't affect the responsiveness per se, since the user is still able to input commands which get executed.
 
+This behaviour can be observer on the provided chat example if Thread.sleep(X) is inserted in ServerConnection.sendToServer() on line 201.
 
 
 \section{Comments About the Course}
 
-The code for the sockets is elegant.
-Surely enough it creates a bias towards how the implementation can/should be done, resulting in a similar code.
-I guess this is why it's mentioned that the copy cannot be copied, though it may be similar.
 
-It took me about 17+-1 hours to do everything, watching videos, planning, coding and writing the report. I tracked the time with toggl.
 
 \end{document}
