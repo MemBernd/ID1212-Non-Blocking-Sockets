@@ -20,6 +20,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.StringJoiner;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.logging.Level;
@@ -40,7 +41,7 @@ public class ServerConnection implements Runnable {
     private SocketChannel channel;
     private OutputHandler output;
     private ByteBuffer messageReceived = ByteBuffer.allocateDirect(Constants.MAX_LENGTH);
-    private Queue<ByteBuffer> messageToSend = new ArrayDeque<>();
+    private final Queue<ByteBuffer> messageToSend = new ArrayDeque<>();
     private boolean sendNow = false;
     
     public void run() {
@@ -113,7 +114,7 @@ public class ServerConnection implements Runnable {
     
     private void sendMessage(String message) {
         synchronized(messageToSend) {
-            messageToSend.add(ByteBuffer.wrap(message.getBytes()));
+            messageToSend.add(prepareMessage(message));
         }
         sendNow = true;
         selector.wakeup();
@@ -125,15 +126,14 @@ public class ServerConnection implements Runnable {
         if (readBytes == -1) {
             throw new IOException("Lost connection");
         }
-        outputMessage(extractMessage(messageReceived));
+        try {
+            outputMessage(verifyMessage(extractFromBuffer(messageReceived)));
+        } catch (IOException e) {
+            outputMessage(e.getMessage());
+        }
     }
     
-    private String extractMessage(ByteBuffer message) {
-        message.flip();
-        byte[] bytes = new byte[message.remaining()];
-        message.get(bytes);
-        return new String(bytes);
-    }
+    
     
     private void sendToServer(SelectionKey key) {
         ByteBuffer message;
@@ -155,6 +155,32 @@ public class ServerConnection implements Runnable {
         } catch (InterruptedException ex) {
             Logger.getLogger(ServerConnection.class.getName()).log(Level.SEVERE, null, ex);
         }
+    }
+    
+    
+    private String extractFromBuffer(ByteBuffer message) {
+        message.flip();
+        byte[] bytes = new byte[message.remaining()];
+        message.get(bytes);
+        return new String(bytes);
+    }
+    
+    
+    private ByteBuffer prepareMessage(String message) {
+        StringJoiner joiner = new StringJoiner(Constants.LENGTH_DELIMITER);
+        joiner.add(Integer.toString(message.length()));
+        joiner.add(message);
+        return ByteBuffer.wrap(joiner.toString().getBytes());
+    }
+    
+    private String verifyMessage(String message) throws IOException {
+        String[] msg = message.split(Constants.LENGTH_DELIMITER);
+        if (msg.length != 2) 
+            throw new IOException("Corrupted message");
+        int length = Integer.parseInt(msg[0]);
+        if (length != msg[1].length())
+            throw new IOException("Length doesn't match");
+        return msg[1];
     }
     
     private void outputMessage(String message) {

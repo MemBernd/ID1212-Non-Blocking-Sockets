@@ -74,7 +74,7 @@ public class Server {
         }
     }
     
-    public void reply(SocketChannel client, String msg) {
+    public void reply(SocketChannel client) {
         client.keyFor(selector).interestOps(SelectionKey.OP_WRITE);
         selector.wakeup();
     }

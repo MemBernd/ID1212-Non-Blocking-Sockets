@@ -41,42 +41,49 @@ public class Handler implements Runnable {
     
     @Override
     public void run() {
-
+        
         try {
-            String[] message = extractFromBuffer(messageReceived).split(Constants.DELIMITER);
-            reply = "";
-            switch (message[0]) {
-                case "QUIT":
-                    disconnect();
-                    exit = true;
-                    break;
-                case "START":
-                    controller.startGame();
-                    reply += "Game started:" + Constants.NEW_LINE;
-                    reply += stateToString();
-                    server.reply(channel, reply);
-                    break;
-                default:
-                    if (controller.gameStarted()) {
-                        try {
-                            if(controller.attempt(message[0].toCharArray())) {
-                                reply += "Game finished as followed:" + Constants.NEW_LINE;
+            String rawMessage = verifyMessage(extractFromBuffer(messageReceived));
+            try {
+                String[] message = rawMessage.split(Constants.DELIMITER);
+                reply = "";
+                switch (message[0]) {
+                    case "QUIT":
+                        disconnect();
+                        exit = true;
+                        break;
+                    case "START":
+                        controller.startGame();
+                        reply += "Game started:" + Constants.NEW_LINE;
+                        reply += stateToString();
+                        server.reply(channel);
+                        break;
+                    default:
+                        if (controller.gameStarted()) {
+                            try {
+                                if(controller.attempt(message[0].toCharArray())) {
+                                    reply += "Game finished as followed:" + Constants.NEW_LINE;
+                                }
+                                reply += stateToString();
+                            } catch (Exception e) {
+                                reply += "Incorrect amount of characters.";
                             }
-                            reply += stateToString();
-                        } catch (Exception e) {
-                            reply += "Incorrect amount of characters.";
+
+                        } else {
+                            reply += "Game hasn't started yet.";
                         }
 
-                    } else {
-                        reply += "Game hasn't started yet.";
-                    }
-
-                    server.reply(channel, reply);
-            }
-        } catch(Exception e) {
-            e.printStackTrace();
-            System.err.println("Error in clienthandler run, aborting.");
-            exit = true;
+                        server.reply(channel);
+                }
+            } catch(Exception e) {
+                e.printStackTrace();
+                System.err.println("Error in clienthandler run, aborting.");
+                exit = true;
+            } 
+        } catch(IOException e) {
+            System.out.println(e.getMessage());
+            reply = e.getMessage();
+            server.reply(channel);
         }   
     }
     
@@ -91,7 +98,7 @@ public class Handler implements Runnable {
     }
     
     public void sendMessage() throws IOException { 
-        channel.write(ByteBuffer.wrap(reply.getBytes()));
+        channel.write(prepareMessage(reply));
     }
     
     private String extractFromBuffer(ByteBuffer message) {
@@ -106,6 +113,16 @@ public class Handler implements Runnable {
         joiner.add(Integer.toString(message.length()));
         joiner.add(message);
         return ByteBuffer.wrap(joiner.toString().getBytes());
+    }
+    
+    private String verifyMessage(String message) throws IOException {
+        String[] msg = message.split(Constants.LENGTH_DELIMITER);
+        if (msg.length != 2) 
+            throw new IOException("Corrupted message");
+        int length = Integer.parseInt(msg[0]);
+        if (length != msg[1].length())
+            throw new IOException("Length doesn't match");
+        return msg[1];
     }
     
     private String stateToString() {
