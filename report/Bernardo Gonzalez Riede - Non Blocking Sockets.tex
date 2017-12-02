@@ -190,7 +190,7 @@ Figure \ref{fig:multiple} shows 2 clients playing at once.
 A slight downside to the approach of using locks, i.e. the synchronized keyword in Java, for accessing the message queue which should be sent to the server, is the following observed behaviour.
 If the sending takes long, e.g. inserting Thread.sleep(10000) on line 143 (ServerConnection.sendToServer()), and the user types more commands which have to be sent then no _prompts_ are printed instantly.
 This is the result of the sendMessage() waiting for the lock to release to be able to queue the command/message.
-This doesn't affect the responsiveness per se, since the user is still able to input commands which get executed.
+This doesn't effect the responsiveness per se, since the user is still able to input commands which get executed.
 
 This behaviour can be observed on the provided chat example, too, if Thread.sleep(X) is inserted in ServerConnection.sendToServer() on line 201.
 

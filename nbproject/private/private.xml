@@ -2,11 +2,6 @@
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
-        <group>
-            <file>file:/C:/Users/Bernardo/Documents/projects/network%20programming/ID1212-Non-Blocking-Sockets/src/server/net/Server.java</file>
-            <file>file:/C:/Users/Bernardo/Documents/projects/network%20programming/ID1212-Non-Blocking-Sockets/src/client/net/ServerConnection.java</file>
-            <file>file:/C:/Users/Bernardo/Documents/projects/network%20programming/ID1212-Non-Blocking-Sockets/src/server/net/Handler.java</file>
-            <file>file:/C:/Users/Bernardo/Documents/projects/network%20programming/ID1212-Non-Blocking-Sockets/src/client/view/Interpreter.java</file>
-        </group>
+        <group/>
     </open-files>
 </project-private>
